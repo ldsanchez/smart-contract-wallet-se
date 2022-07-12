@@ -12,21 +12,38 @@ const localChainId = "31337";
 //     }, ms)
 //   );
 
-module.exports = async ({ getNamedAccounts, deployments, getChainId }) => {
+// module.exports = async ({ getNamedAccounts, deployments, getChainId }) => {
+//   const { deploy } = deployments;
+//   const { deployer } = await getNamedAccounts();
+//   const chainId = await getChainId();
+//   const guardian01 = ethers.utils.keccak256(
+//     "0xd2845E5E37843D66eBBD245Cf4F963192cc01296"
+//   );
+//   const guardian02 = ethers.utils.keccak256(
+//     "0x458FaF7291DEfA4148b83c8f2d1D10bdf8e28330"
+//   );
+//   const guardians = [guardian01, guardian02];
+
+//   await deploy("SmartContractWallet", {
+//     // Learn more about args here: https://www.npmjs.com/package/hardhat-deploy#deploymentsdeploy
+//     from: deployer,
+//     args: ["0xc59799d00FDBA189595956Aba28A1D45800C273f", guardians, 2],
+//     log: true,
+//     waitConfirmations: 5,
+//   });
+
+module.exports = async ({ getNamedAccounts, deployments }) => {
   const { deploy } = deployments;
   const { deployer } = await getNamedAccounts();
-  const chainId = await getChainId();
-
-  await deploy("YourContract", {
+  await deploy("SmartContractWalletFactory", {
     // Learn more about args here: https://www.npmjs.com/package/hardhat-deploy#deploymentsdeploy
     from: deployer,
-    // args: [ "Hello", ethers.utils.parseEther("1.5") ],
     log: true,
     waitConfirmations: 5,
   });
 
   // Getting a previously deployed contract
-  const YourContract = await ethers.getContract("YourContract", deployer);
+  // const SmartContractWallet = await ethers.getContract("SmartContractWallet", deployer);
   /*  await YourContract.setPurpose("Hello");
   
     // To take ownership of yourContract using the ownable library uncomment next line and add the 
@@ -79,4 +96,4 @@ module.exports = async ({ getNamedAccounts, deployments, getChainId }) => {
   //   console.error(error);
   // }
 };
-module.exports.tags = ["YourContract"];
+module.exports.tags = ["SmartContractWallet"];
