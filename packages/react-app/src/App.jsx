@@ -8,6 +8,7 @@ import {
   useOnBlock,
   useUserProviderAndSigner,
 } from "eth-hooks";
+import { useEventListener } from "eth-hooks/events/";
 import { useExchangeEthPrice } from "eth-hooks/dapps/dex";
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, Route, Switch, useLocation } from "react-router-dom";
@@ -29,8 +30,9 @@ import externalContracts from "./contracts/external_contracts";
 // contracts
 import deployedContracts from "./contracts/hardhat_contracts.json";
 import nonDeployedContracts from "./contracts/hardhat_non_deployed_contracts";
+import nonDeployedABI from "./contracts/hardhat_non_deployed_contracts.json";
 import { Transactor, Web3ModalSetup } from "./helpers";
-import { Home, ExampleUI, Hints, Subgraph } from "./views";
+import { Home, ManageGuardians, GuardianCenter, Hints, Subgraph } from "./views";
 import { useStaticJsonRPC } from "./hooks";
 
 const { ethers } = require("ethers");
@@ -142,8 +144,7 @@ function App(props) {
   // Just plug in different 🛰 providers to get your balance on different chains:
   const yourMainnetBalance = useBalance(mainnetProvider, address);
 
-  // const contractConfig = useContractConfig();
-
+  // Smart Contract Wallet
   const contractConfig = {
     deployedContracts: deployedContracts || {},
     externalContracts: externalContracts || {},
@@ -170,9 +171,6 @@ function App(props) {
   const myMainnetDAIBalance = useContractReader(mainnetContracts, "DAI", "balanceOf", [
     "0x34aA3F359A9D614239015126635CE7732c18fDF3",
   ]);
-
-  // keep track of a variable from the contract in the local React state:
-  // const purpose = useContractReader(readContracts, "YourContract", "purpose");
 
   /*
   const addressFromENS = useResolveName(mainnetProvider, "austingriffith.eth");
@@ -251,8 +249,111 @@ function App(props) {
 
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
 
+  // Smart Contract Wallet
   const contractName = "SmartContractWallet";
   const contractAddress = readContracts?.SmartContractWallet?.address;
+
+  const walletSmartContractWalletEvents = useEventListener(
+    readContracts,
+    "SmartContractWalletFactory",
+    "Wallet",
+    localProvider,
+    1,
+  );
+
+  if (DEBUG) console.log("📟 walletSmartContractWalletEvents:", walletSmartContractWalletEvents);
+
+  const [contractNameForEvent, setContractNameForEvent] = useState();
+  const [smartContractWallets, setSmartContractWallets] = useState([]);
+  const [currentSmartContractWalletAddress, setCurrentSmartContractWalletAddress] = useState();
+
+  useEffect(() => {
+    if (address) {
+      const smartContractWalletsForUser = walletSmartContractWalletEvents.reduce((filtered, createEvent) => {
+        if (createEvent.args.owner.includes(address) && !filtered.includes(createEvent.args.contractAddress)) {
+          filtered.push(createEvent.args.contractAddress);
+        } else if (
+          createEvent.args.guardians.includes(ethers.utils.keccak256(address)) &&
+          !filtered.includes(createEvent.args.contractAddress)
+        ) {
+          filtered.push(createEvent.args.contractAddress);
+        } else if (
+          !createEvent.args.owner.includes(address) &&
+          !createEvent.args.guardians.includes(ethers.utils.keccak256(address)) &&
+          filtered.includes(createEvent.args.contractAddress)
+        ) {
+          const index = filtered.indexOf(createEvent.args.contractAddress);
+          filtered.splice(index, 1);
+        }
+
+        console.log("FILTERED", filtered);
+        return filtered;
+      }, []);
+
+      if (smartContractWalletsForUser.length > 0) {
+        const recentSmartContractWalletAddress = smartContractWalletsForUser[smartContractWalletsForUser.length - 1];
+        if (recentSmartContractWalletAddress !== currentSmartContractWalletAddress) setContractNameForEvent(null);
+        setCurrentSmartContractWalletAddress(recentSmartContractWalletAddress);
+        // setCurrentSmartContractWalletAddress(null);
+        setSmartContractWallets(smartContractWalletsForUser);
+      } else {
+        setCurrentSmartContractWalletAddress(null);
+        setSmartContractWallets([]);
+      }
+    }
+  }, [walletSmartContractWalletEvents, address]);
+
+  const userHasSmartContractWallets = currentSmartContractWalletAddress ? true : false;
+
+  const allGuardianEvents = useEventListener(
+    currentSmartContractWalletAddress ? readContracts : null,
+    contractNameForEvent,
+    "Guardian",
+    localProvider,
+    1,
+  );
+  if (DEBUG) console.log("📟 guardianEvents:", allGuardianEvents);
+
+  const [guardianEvents, setGuardianEvents] = useState();
+
+  useEffect(() => {
+    setGuardianEvents(
+      allGuardianEvents.filter(contractEvent => contractEvent.address === currentSmartContractWalletAddress),
+    );
+  }, [allGuardianEvents, currentSmartContractWalletAddress]);
+
+  const [guardiansRequired, setGuardiansRequired] = useState(0);
+  const [isGuardian, setIsGuardian] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    async function getContractValues() {
+      const guardiansRequired = await readContracts.SmartContractWallet.guardiansRequired();
+      setGuardiansRequired(guardiansRequired);
+      const isGuardian = await readContracts.SmartContractWallet.isGuardian(ethers.utils.keccak256(address));
+      setIsGuardian(isGuardian);
+      const owner = await readContracts.SmartContractWallet.owner();
+      if (owner === address) {
+        setIsOwner(true);
+      }
+    }
+
+    if (currentSmartContractWalletAddress) {
+      readContracts.SmartContractWallet = new ethers.Contract(
+        currentSmartContractWalletAddress,
+        nonDeployedABI.SmartContractWallet,
+        localProvider,
+      );
+      writeContracts.SmartContractWallet = new ethers.Contract(
+        currentSmartContractWalletAddress,
+        nonDeployedABI.SmartContractWallet,
+        userSigner,
+      );
+
+      setContractNameForEvent("SmartContractWallet");
+      getContractValues();
+    }
+  }, [currentSmartContractWalletAddress, localProvider, readContracts, writeContracts]);
 
   return (
     <div className="App">
@@ -300,19 +401,26 @@ function App(props) {
         logoutOfWeb3Modal={logoutOfWeb3Modal}
         USE_NETWORK_SELECTOR={USE_NETWORK_SELECTOR}
       />
-      <Menu style={{ textAlign: "center", marginTop: 20 }} selectedKeys={[location.pathname]} mode="horizontal">
+      <Menu style={{ textAlign: "center", marginTop: 5 }} selectedKeys={[location.pathname]} mode="horizontal">
         <Menu.Item key="/">
-          <Link to="/">App Home</Link>
+          <Link to="/">Wallet</Link>
         </Menu.Item>
+        {isOwner && (
+          <Menu.Item key="/manageguardians">
+            <Link to="/manageguardians">Manage Guardians</Link>
+          </Menu.Item>
+        )}
+        {isGuardian && (
+          <Menu.Item key="/guardiancenter">
+            <Link to="/guardiancenter">Guardian Center</Link>
+          </Menu.Item>
+        )}
         <Menu.Item key="/debug">
           <Link to="/debug">Debug Contracts</Link>
         </Menu.Item>
         <Menu.Item key="/hints">
           <Link to="/hints">Hints</Link>
         </Menu.Item>
-        {/* <Menu.Item key="/exampleui">
-          <Link to="/exampleui">ExampleUI</Link>
-        </Menu.Item> */}
         <Menu.Item key="/mainnetdai">
           <Link to="/mainnetdai">Mainnet DAI</Link>
         </Menu.Item>
@@ -339,6 +447,38 @@ function App(props) {
             DEBUG={DEBUG}
             blockExplorer={blockExplorer}
             userSigner={userSigner}
+            isOwner={isOwner}
+            isGuardian={isGuardian}
+          />
+        </Route>
+        <Route path="/manageguardians">
+          <ManageGuardians
+            userHasSmartContractWallets={userHasSmartContractWallets}
+            contractAddress={contractAddress}
+            address={address}
+            userSigner={userSigner}
+            mainnetProvider={mainnetProvider}
+            localProvider={localProvider}
+            tx={tx}
+            writeContracts={writeContracts}
+            readContracts={readContracts}
+            blockExplorer={blockExplorer}
+            guardianEvents={guardianEvents}
+            guardiansRequired={guardiansRequired}
+            DEBUG={DEBUG}
+          />
+        </Route>
+        <Route path="/guardiancenter">
+          <GuardianCenter
+            address={address}
+            userSigner={userSigner}
+            mainnetProvider={mainnetProvider}
+            localProvider={localProvider}
+            yourLocalBalance={yourLocalBalance}
+            price={price}
+            tx={tx}
+            writeContracts={writeContracts}
+            readContracts={readContracts}
           />
         </Route>
         <Route exact path="/debug">
@@ -377,20 +517,6 @@ function App(props) {
             price={price}
           />
         </Route>
-        {/* <Route path="/exampleui">
-          <ExampleUI
-            address={address}
-            userSigner={userSigner}
-            mainnetProvider={mainnetProvider}
-            localProvider={localProvider}
-            yourLocalBalance={yourLocalBalance}
-            price={price}
-            tx={tx}
-            writeContracts={writeContracts}
-            readContracts={readContracts}
-            purpose={purpose}
-          />
-        </Route> */}
         <Route path="/mainnetdai">
           <Contract
             name="DAI"
@@ -402,16 +528,6 @@ function App(props) {
             contractConfig={contractConfig}
             chainId={1}
           />
-          {/*
-            <Contract
-              name="UNI"
-              customContract={mainnetContracts && mainnetContracts.contracts && mainnetContracts.contracts.UNI}
-              signer={userSigner}
-              provider={mainnetProvider}
-              address={address}
-              blockExplorer="https://etherscan.io/"
-            />
-            */}
         </Route>
         <Route path="/subgraph">
           <Subgraph

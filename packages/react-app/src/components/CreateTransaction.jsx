@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Input, Select, InputNumber, Space, Tooltip } from "antd";
+import { Button, Input, Select, Space, Tooltip } from "antd";
 import { CodeOutlined } from "@ant-design/icons";
 import { AddressInput, EtherInput, WalletConnectInput } from "../components";
 import TransactionDetailsModal from "../components/TransactionDetailsModal";
@@ -9,27 +9,19 @@ import { ethers } from "ethers";
 import { parseEther } from "@ethersproject/units";
 const { Option } = Select;
 
-// const axios = require("axios");
-
 export default function CreateTransaction({
   contractName,
   contractAddress,
   mainnetProvider,
   localProvider,
   price,
-  readContracts,
+  tx,
   writeContracts,
-  userSigner,
   DEBUG,
-  nonce,
-  blockExplorer,
-  guardiansRequired,
 }) {
-  console.log("🔐 writeContracts XXXX", writeContracts);
   const [methodName, setMethodName] = useLocalStorage("methodName", "transferFunds");
-  const [newGuardiansRequired, setNewGuardiansRequired] = useState(guardiansRequired);
   const [amount, setAmount] = useState("0");
-  const [to, setTo] = useLocalStorage("to");
+  const [to, setTo] = useLocalStorage("");
   const [customCallData, setCustomCallData] = useState("");
   const [parsedCustomCallData, setParsedCustomCallData] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -74,55 +66,20 @@ export default function CreateTransaction({
       if (methodName === "transferFunds" || methodName === "customCallData" || methodName === "wcCallData") {
         callData = methodName === "transferFunds" ? "0x" : customCallData;
         executeToAddress = to;
-      } else {
-        callData = readContracts[contractName]?.interface?.encodeFunctionData(methodName, [to, newGuardiansRequired]);
-        executeToAddress = contractAddress;
       }
 
-      // const newHash = await readContracts[contractName].getTransactionHash(
-      //   nonce.toNumber(),
-      //   executeToAddress,
-      //   parseEther("" + parseFloat(amount).toFixed(12)),
-      //   callData,
-      // );
-
-      await writeContracts[contractName].executeTransaction(
-        executeToAddress,
-        parseEther("" + parseFloat(amount).toFixed(12)),
-        callData,
+      await tx(
+        writeContracts[contractName].executeTransaction(
+          executeToAddress,
+          parseEther("" + parseFloat(amount).toFixed(12)),
+          callData,
+        ),
       );
-
-      // const signature = await userSigner?.signMessage(ethers.utils.arrayify(newHash));
-      // console.log("signature: ", signature);
-
-      // const recover = await readContracts[contractName].recover(newHash, signature);
-      // console.log("recover: ", recover);
-
-      // const isOwner = await readContracts[contractName].isOwner(recover);
-      // console.log("isOwner: ", isOwner);
-
-      // if (isOwner) {
-      //   const res = await axios.post(poolServerUrl, {
-      //     chainId: localProvider._network.chainId,
-      //     address: readContracts[contractName]?.address,
-      //     nonce: nonce.toNumber(),
-      //     to: executeToAddress,
-      //     amount,
-      //     data: callData,
-      //     hash: newHash,
-      //     signatures: [signature],
-      //     signers: [recover],
-      //   });
-
-      //   console.log("RESULT", res.data);
-      //   setTimeout(() => {
-      //     setLoading(false);
-      //   }, 1000);
-      // } else {
-      //   console.log("ERROR, NOT OWNER.");
-      //   setLoading(false);
-      // }
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
       setAmount("0");
+      setTo("");
     } catch (error) {
       console.log("Error: ", error);
       setLoading(false);
@@ -131,13 +88,11 @@ export default function CreateTransaction({
 
   return (
     <div>
-      <div style={{ border: "1px solid #cccccc", padding: 16, width: 400, margin: "auto", marginTop: 24 }}>
+      <div style={{ width: 550, margin: "auto", marginTop: 15 }}>
         <div style={{ margin: 8 }}>
           <div style={{ margin: 8, padding: 8 }}>
             <Select value={methodName} style={{ width: "100%" }} onChange={setMethodName}>
               <Option key="transferFunds">Send ETH</Option>
-              <Option key="addOwner">Add Owner</Option>
-              <Option key="removeOwner">Remove Owner</Option>
               <Option key="customCallData">Custom Call Data</Option>
               <Option key="wcCallData">
                 <img src="walletconnect-logo.svg" alt="walletconnect-logo" style={{ height: 20, width: 20 }} />
@@ -161,20 +116,12 @@ export default function CreateTransaction({
                 <AddressInput
                   autoFocus
                   ensProvider={mainnetProvider}
-                  placeholder={methodName === "transferFunds" ? "Recepient address" : "Owner address"}
+                  placeholder={methodName === "transferFunds" ? "Recepient address" : "Target address"}
                   value={to}
                   onChange={setTo}
                 />
               </div>
               <div style={inputStyle}>
-                {(methodName === "addOwner" || methodName === "removeOwner") && (
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    placeholder="New # of signatures required"
-                    value={newGuardiansRequired}
-                    onChange={setNewGuardiansRequired}
-                  />
-                )}
                 {methodName === "customCallData" && (
                   <>
                     <Input.Group compact>
@@ -204,9 +151,9 @@ export default function CreateTransaction({
                   <EtherInput price={price} mode="USD" value={amount} onChange={setAmount} />
                 )}
               </div>
-              <Space style={{ marginTop: 32 }}>
+              <Space style={{ marginTop: 20 }}>
                 <Button loading={loading} onClick={createTransaction} type="primary">
-                  Propose
+                  Execute
                 </Button>
               </Space>
             </>

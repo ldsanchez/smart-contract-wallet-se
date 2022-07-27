@@ -4,6 +4,10 @@ pragma solidity ^0.8.13;
 // SmartContractWallet instance contract
 import "./SmartContractWallet.sol";
 
+/// @title A Smart Contract Wallet Factory
+/// @author Leonardo Sanchez
+/// @notice Basic implementation of Vitalik's "Why we need wide adoption of social recovery wallets" post
+/// @dev This contract has not been audited, it's just for edutaiment purposes only
 contract SmartContractWalletFactory {
     // Keep track of SmartContractWallet instances
     SmartContractWallet[] public smartContractWallets;
@@ -33,12 +37,16 @@ contract SmartContractWalletFactory {
     modifier onlyRegistered() {
         require(
             existsSmartContractWallet[msg.sender],
-            "caller not registered to use logger"
+            "Caller not registered to use logger"
         );
         _;
     }
 
-    // Emit Wallet events used from SmartContractWallet instance
+    /// @notice Emit Wallet events used from SmartContractWallet instance to keep track of Wallet info
+    /// @param _contractAddress ChainId of the deployed wallet
+    /// @param _owner Initial owner of the wallet
+    /// @param _guardians Initial Guardian Address Hashes calculated in the front-end
+    /// @param _guardiansRequired Minimum required Guardians to fullfiil a Recovery
     function emitWallet(
         address _contractAddress,
         address _owner,
@@ -48,22 +56,26 @@ contract SmartContractWalletFactory {
         emit Wallet(_contractAddress, _owner, _guardians, _guardiansRequired);
     }
 
-    // Get the number of wallets
+    /// @notice Get the number of wallets
     function numberOfSmartContractWallets() public view returns (uint256) {
         return smartContractWallets.length;
     }
 
-    // Create a SmartContractWallet instance and make it payable
+    /// @notice Create a SmartContractWallet instance and make it payable
+    /// @param _chainId ChainId of the deployed wallet
+    /// @param _owner Initial owner of the wallet
+    /// @param _guardianAddressHashes Initial Guardian Address Hashes calculated in the front-end
+    /// @param _guardiansRequired Minimum required Guardians to fullfiil a Recovery
     function createSmartContractWallet(
         uint256 _chainId,
         address _owner,
         bytes32[] memory _guardianAddressHashes,
         uint256 _guardiansRequired
     ) public payable {
-        // SmartContractWallet ID
+        /// SmartContractWallet ID
         uint256 id = numberOfSmartContractWallets();
 
-        // Create a new instance
+        /// Create a new instance
         SmartContractWallet smartContractWallet = (new SmartContractWallet){
             value: msg.value
         }(
@@ -73,11 +85,11 @@ contract SmartContractWalletFactory {
             _guardiansRequired,
             address(this)
         );
-        // Update
+        /// Update
         smartContractWallets.push(smartContractWallet);
         existsSmartContractWallet[address(smartContractWallet)] = true;
 
-        // Emit Create and Initial Wallet events
+        /// Emit Create and Initial Wallet events
         emit Create(
             id,
             address(smartContractWallet),
@@ -94,7 +106,7 @@ contract SmartContractWalletFactory {
         );
     }
 
-    // Get SmartContractWallet information
+    /// @notice Create a SmartContractWallet instance and make it payable
     function getSmartContractWallet(uint256 _index)
         public
         view

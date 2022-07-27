@@ -28,3 +28,5 @@ export { default as CreateTransaction } from "./CreateTransaction";
 export { default as WalletConnectInput } from "./WalletConnectInput";
 export { default as CreateSmartContractWalletModal } from "./CreateSmartContractWalletModal";
 export { default as CreateSmartContractWalletModalSentOverlay } from "./CreateSmartContractWalletModalSentOverlay";
+export { default as ManageGuardiansTransactions } from "./ManageGuardiansTransactions";
+export { default as GuardianCenterTransactions } from "./GuardianCenterTransactions";

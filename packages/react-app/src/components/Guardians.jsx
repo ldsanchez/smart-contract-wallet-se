@@ -1,10 +1,23 @@
 import React from "react";
+import { useEventListener } from "eth-hooks/events/useEventListener";
 import { List, Spin, Collapse } from "antd";
 import Address from "./Address";
 
 const { Panel } = Collapse;
 
-export default function Guardians({ guardianEvents, guardiansRequired, mainnetProvider, blockExplorer }) {
+// export default function Guardians({ guardianEvents, guardiansRequired, mainnetProvider, blockExplorer }) {
+export default function Guardians({
+  contracts,
+  contractName,
+  eventName,
+  localProvider,
+  startBlock,
+  guardiansRequired,
+  mainnetProvider,
+  blockExplorer,
+}) {
+  const guardianEvents = useEventListener(contracts, contractName, eventName, localProvider, startBlock);
+
   const guardians = new Set();
   const prevGuardians = new Set();
   guardianEvents.forEach(guardianEvent => {
@@ -58,7 +71,7 @@ export default function Guardians({ guardianEvents, guardiansRequired, mainnetPr
                     fontSize={24}
                   />
                 </List.Item>
-              )
+              );
             }}
           />
         </Panel>

@@ -15,7 +15,6 @@ export default function CreateSmartContractWalletModal({
   isCreateModalVisible,
   setIsCreateModalVisible,
 }) {
-  console.log("🔐 writeContractsYYYYY", writeContracts);
   // Transaction status State
   const [pendingCreate, setPendingCreate] = useState(false);
   const [txSent, setTxSent] = useState(false);
@@ -103,7 +102,6 @@ export default function CreateSmartContractWalletModal({
 
       guardians.forEach((element, index) => {
         guardians[index] = ethers.utils.keccak256(element);
-        console.log("keccak256", guardians[index]);
       });
 
       tx(

@@ -1,4 +1,4 @@
-import { Button, Input, Badge } from "antd"
+import { Button, Input, Badge } from "antd";
 import { CameraOutlined, QrcodeOutlined } from "@ant-design/icons";
 import WalletConnect from "@walletconnect/client";
 import QrReader from "react-qr-reader";
@@ -7,13 +7,7 @@ import { useLocalStorage } from "../hooks";
 import { parseExternalContractTransaction } from "../helpers";
 import TransactionDetailsModal from "./TransactionDetailsModal";
 
-const WalletConnectInput = ({
-  chainId,
-  address,
-  loadWalletConnectData,
-  mainnetProvider,
-  price,
-}) => {
+const WalletConnectInput = ({ chainId, address, loadWalletConnectData, mainnetProvider, price }) => {
   const [walletConnectConnector, setWalletConnectConnector] = useLocalStorage("walletConnectConnector");
   const [walletConnectUri, setWalletConnectUri] = useLocalStorage("walletConnectUri", "");
   const [isConnected, setIsConnected] = useLocalStorage("isConnected", false);
@@ -57,7 +51,7 @@ const WalletConnectInput = ({
     }
   };
 
-  const subscribeToEvents = (connector) => {
+  const subscribeToEvents = connector => {
     connector.on("session_request", (error, payload) => {
       if (error) {
         throw error;
@@ -68,7 +62,7 @@ const WalletConnectInput = ({
 
       connector.approveSession({
         accounts: [address],
-        chainId
+        chainId,
       });
 
       if (connector.connected) {
@@ -94,9 +88,9 @@ const WalletConnectInput = ({
       console.log("Event: disconnect", payload);
       resetConnection();
     });
-  }
+  };
 
-  const parseCallRequest = (payload) => {
+  const parseCallRequest = payload => {
     const callData = payload.params[0];
     setValue(callData.value);
     setTo(callData.to);
@@ -109,7 +103,6 @@ const WalletConnectInput = ({
     }
   }, [data]);
 
-
   const decodeFunctionData = async () => {
     try {
       const parsedTransactionData = await parseExternalContractTransaction(to, data);
@@ -121,11 +114,10 @@ const WalletConnectInput = ({
     }
   };
 
-
   const killSession = () => {
-    console.log("ACTION", "killSession")
+    console.log("ACTION", "killSession");
     if (walletConnectConnector.connected) {
-      walletConnectConnector.killSession()
+      walletConnectConnector.killSession();
     }
   };
 
@@ -138,7 +130,6 @@ const WalletConnectInput = ({
       value,
     });
   };
-
 
   const resetConnection = () => {
     setWalletConnectUri("");
@@ -175,7 +166,7 @@ const WalletConnectInput = ({
               if (newValue) {
                 console.log("SCAN VALUE", newValue);
                 setScan(false);
-                setWalletConnectUri(newValue)
+                setWalletConnectUri(newValue);
               }
             }}
             style={{ width: "100%" }}
@@ -187,7 +178,7 @@ const WalletConnectInput = ({
 
       <Input.Group compact>
         <Input
-          style={{ width: 'calc(100% - 31px)', marginBottom: 20 }}
+          style={{ width: "calc(100% - 31px)", marginBottom: 20 }}
           placeholder="Paste WalletConnect URI"
           disabled={isConnected}
           value={walletConnectUri}
@@ -195,7 +186,7 @@ const WalletConnectInput = ({
         />
         <Button
           disabled={isConnected}
-          onClick={ () => setScan(!scan) }
+          onClick={() => setScan(!scan)}
           icon={
             <Badge count={<CameraOutlined style={{ fontSize: 9 }} />}>
               <QrcodeOutlined style={{ fontSize: 18 }} />
@@ -204,7 +195,7 @@ const WalletConnectInput = ({
         />
       </Input.Group>
 
-      {isConnected &&
+      {isConnected && (
         <>
           <div style={{ marginTop: 10 }}>
             <img
@@ -217,9 +208,9 @@ const WalletConnectInput = ({
             Disconnect
           </Button>
         </>
-      }
+      )}
 
-      {isModalVisible &&
+      {isModalVisible && (
         <TransactionDetailsModal
           visible={isModalVisible}
           txnInfo={parsedTransactionData}
@@ -229,8 +220,8 @@ const WalletConnectInput = ({
           mainnetProvider={mainnetProvider}
           price={price}
         />
-      }
+      )}
     </>
-  )
+  );
 }
-export default WalletConnectInput
+export default WalletConnectInput;

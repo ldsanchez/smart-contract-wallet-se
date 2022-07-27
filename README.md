@@ -1,26 +1,216 @@
-# 🏗 Scaffold-ETH
+# 🏗 Scaffold-ETH - Smart Contract Wallet Factory
 
-> everything you need to build on Ethereum! 🚀
+## with Social Recovery
 
-🧪 Quickly experiment with Solidity using a frontend that adapts to your smart contract:
+> Create multiple Smart Wallets with Social Recovery from a simple interface + Debug Interface with Smart Contract Wallet Factory & selected Wallet instance! 🚀
 
-![image](https://user-images.githubusercontent.com/2653167/124158108-c14ca380-da56-11eb-967e-69cde37ca8eb.png)
+![image](https://user-images.githubusercontent.com/5996795/180932403-4feb979f-0874-4cae-90e8-c496850ef6df.png)
 
+BuidlGuidl Build submission: Scaffold-ETH implementation of a Social Recovery Wallet based on Vitalik's [Why we need wide adoption of social recovery wallets](https://vitalik.ca/general/2021/01/11/recovery.html) post.
+
+# Use Case
+
+Losing access to wallets is an increasing problem with so many new people onboarding crypto, a Social Recovery Smart Contract Wallet implementation helps solve this particular issue, by giving power to a group of actors (friends & family / other owned wallets) that can help the owner in the recovery process.
+
+# Features
+
+- Transfers / Contract Calls Transactions
+- Guardian Management
+- Social Recovery
+- Guardian Reveal
+
+# Implementation
+
+Social Recovery is implemented by assigning several wallet guardians, and a minimum of required recovery supporters, hiding their identity through a hash of their addresses until the recovery is initiated by request of the owner, changing the ownership of the wallet.
+
+## Wallet Creation
+
+For the wallet creation we only need the guardians addresses (converted into hashes using ethers.utils.keccak256 in the front-end) and minimum guardians required for a recovery.
+
+```solidity
+    constructor(
+        uint256 _chainId,
+        address _owner,
+        bytes32[] memory guardianAddressHashes,
+        uint256 _guardiansRequired,
+        address _factory
+    ) payable nonZeroGuardians(_guardiansRequired) {
+        smartContractWalletFactory = SmartContractWalletFactory(_factory);
+        require(
+            _guardiansRequired <= guardianAddressHashes.length,
+            "Number of guardians too high"
+        );
+
+        for (uint256 i = 0; i < guardianAddressHashes.length; i++) {
+            require(
+                !isGuardian[guardianAddressHashes[i]],
+                "Duplicate guardian"
+            );
+            isGuardian[guardianAddressHashes[i]] = true;
+            guardiansAddressHashes.push(guardianAddressHashes[i]);
+            emit Guardian(
+                guardianAddressHashes[i],
+                isGuardian[guardianAddressHashes[i]]
+            );
+        }
+
+        guardiansRequired = _guardiansRequired;
+        chainId = _chainId;
+        owner = _owner;
+    }
+```
+
+## Transactions
+
+Using a Call function for Transfers / Contract Interaction
+
+```solidity
+function executeTransaction(
+        address payable _target,
+        uint256 _value,
+        bytes memory _data
+    ) external onlyOwner returns (bytes memory) {
+        (bool success, bytes memory result) = _target.call{value: _value}(
+            _data
+        );
+        require(success, "Transaction Failed");
+        nonce++;
+        emit TransactionExecuted(nonce - 1, _target, _value, _data, result);
+        return result;
+    }
+```
+
+## Social Recovery
+
+The Social Recovery initiates when we ask / use one of our guardians to initiate the recovery process, passing the new proposed owner address, creating a recovery round and setting the recovery mode of our wallet. Each Guardian discloses their address and we keep track of them.
+
+```solidity
+function initiateRecovery(address _proposedOwner)
+        external
+        onlyGuardian
+        notInRecovery
+    {
+        proposedOwner = _proposedOwner;
+        currentRecoveryRound++;
+        guardianToRecovery[msg.sender] = Recovery(
+            _proposedOwner,
+            currentRecoveryRound,
+            false
+        );
+        revealedGuardiansAddress.push(msg.sender);
+        isSupporter[msg.sender] = true;
+        inRecovery = true;
+        emit RecoveryInitiated(
+            msg.sender,
+            _proposedOwner,
+            currentRecoveryRound
+        );
+    }
+```
+
+Then is time for other guardians to support the recovery process, with the same information as above.
+
+```solidity
+function supportRecovery(address _proposedOwner)
+        external
+        onlyGuardian
+        onlyInRecovery
+    {
+        require(!isSupporter[msg.sender], "Sender is already a supporter");
+        guardianToRecovery[msg.sender] = Recovery(
+            _proposedOwner,
+            currentRecoveryRound,
+            false
+        );
+        revealedGuardiansAddress.push(msg.sender);
+        emit RecoverySupported(
+            msg.sender,
+            _proposedOwner,
+            currentRecoveryRound
+        );
+    }
+```
+
+Finally any Guardian executes the recovery, that goes through each supporter and compares the values to see if an agreement was met for the recovery process.
+
+```solidity
+function executeRecovery() external onlyGuardian onlyInRecovery {
+        require(
+            revealedGuardiansAddress.length >= guardiansRequired,
+            "More guardians required to transfer ownership"
+        );
+
+        for (uint256 i = 0; i < revealedGuardiansAddress.length; i++) {
+            Recovery memory recovery = guardianToRecovery[
+                revealedGuardiansAddress[i]
+            ];
+
+            if (recovery.proposedOwner != proposedOwner) {
+                revert Disagreement__OnNewOwner();
+            }
+
+            guardianToRecovery[revealedGuardiansAddress[i]]
+                .usedInExecuteRecovery = true;
+            isSupporter[revealedGuardiansAddress[i]] = false;
+        }
+
+        inRecovery = false;
+        address _oldOwner = owner;
+        owner = proposedOwner;
+        delete revealedGuardiansAddress;
+        delete proposedOwner;
+        emit RecoveryExecuted(_oldOwner, owner, currentRecoveryRound);
+        smartContractWalletFactory.emitWallet(
+            address(this),
+            owner,
+            guardiansAddressHashes,
+            guardiansRequired
+        );
+    }
+```
+
+# Dapp
+
+Using Scaffold-ETH is easy to prototype these complex interactions between Owner and Guardians, from the Debug tab we can test everything before creating the interface for our Dapp, by opening several browers each one representing a different wallet / actor.
+
+## From the Owner perspective
+
+- Create Multiple Wallets
+
+![image](https://user-images.githubusercontent.com/5996795/180932403-4feb979f-0874-4cae-90e8-c496850ef6df.png)
+
+- See if it's on Recovery Mode, and cancel it if you did not requested
+
+![image](https://user-images.githubusercontent.com/5996795/180935352-489f2672-ce23-486e-8164-c547a5471589.png)
+
+- Manage the Guardians
+
+![image](https://user-images.githubusercontent.com/5996795/180934933-14758ec1-fd5b-489c-9428-7d0cd846119c.png)
+
+## From the Guardian perspective
+
+- See wallets of which you are the guardian
+
+![image](https://user-images.githubusercontent.com/5996795/180935821-c9d4d837-fc53-44f7-99f4-4126b5f44f06.png)
+
+- Initiate, Support and Execute a recovery, transfer your Guardianship, as Revealing your identity if the owner passes away, including your email to reach each other
+
+![image](https://user-images.githubusercontent.com/5996795/180940212-f08defd9-6a2b-4cb3-8c05-63e7ae421382.png)
 
 # 🏄‍♂️ Quick Start
 
 Prerequisites: [Node (v16 LTS)](https://nodejs.org/en/download/) plus [Yarn](https://classic.yarnpkg.com/en/docs/install/) and [Git](https://git-scm.com/downloads)
 
-> clone/fork 🏗 scaffold-eth:
+> clone/fork 🏗 scaffold-eth: Smart Contract Wallet Factory
 
 ```bash
-git clone https://github.com/scaffold-eth/scaffold-eth.git
+git clone https://github.com/ldsanchez/smart-contract-wallet-se.git
 ```
 
 > install and start your 👷‍ Hardhat chain:
 
 ```bash
-cd scaffold-eth
+cd smart-contract-wallet-se
 yarn install
 yarn chain
 ```
@@ -28,85 +218,79 @@ yarn chain
 > in a second terminal window, start your 📱 frontend:
 
 ```bash
-cd scaffold-eth
+cd smart-contract-wallet-se
 yarn start
 ```
 
 > in a third terminal window, 🛰 deploy your contract:
 
 ```bash
-cd scaffold-eth
+cd smart-contract-wallet-se
 yarn deploy
+yarn export-non-deployed
 ```
 
-🔏 Edit your smart contract `YourContract.sol` in `packages/hardhat/contracts`
+🔏 Edit your smart contract `SmartContractWalletFactory.sol` & `SmartContractWallet.sol` in `packages/hardhat/contracts`
 
-📝 Edit your frontend `App.jsx` in `packages/react-app/src`
+📝 Edit your frontend `App.jsx` & `Home.jsx` in `packages/react-app/src`
 
 💼 Edit your deployment scripts in `packages/hardhat/deploy`
 
 📱 Open http://localhost:3000 to see the app
 
-# 📚 Documentation
+# TO-DO
 
-Documentation, tutorials, challenges, and many more resources, visit: [docs.scaffoldeth.io](https://docs.scaffoldeth.io)
+- Implementing Vaults for securing the assets (timelock / restrictions ) as stated in Vitalik's post [How to Implement Secure Bitcoin Vaults](https://hackingdistributed.com/2016/02/26/how-to-implement-secure-bitcoin-vaults/)
+- Inttegrating Events with notification services
 
+# Deploy it! 🛰
 
-# 🍦 Other Flavors
-- [scaffold-eth-typescript](https://github.com/scaffold-eth/scaffold-eth-typescript)
-- [scaffold-eth-tailwind](https://github.com/stevenpslade/scaffold-eth-tailwind)
-- [scaffold-nextjs](https://github.com/scaffold-eth/scaffold-eth/tree/scaffold-nextjs)
-- [scaffold-chakra](https://github.com/scaffold-eth/scaffold-eth/tree/chakra-ui)
-- [eth-hooks](https://github.com/scaffold-eth/eth-hooks)
-- [eth-components](https://github.com/scaffold-eth/eth-components)
-- [scaffold-eth-expo](https://github.com/scaffold-eth/scaffold-eth-expo)
-- [scaffold-eth-truffle](https://github.com/trufflesuite/scaffold-eth)
+📡 Edit the defaultNetwork in packages/hardhat/hardhat.config.js, as well as targetNetwork in packages/react-app/src/App.jsx, to your choice of public EVM networks
 
+👩‍🚀 You will want to run yarn account to see if you have a deployer address.
 
+🔐 If you don't have one, run yarn generate to create a mnemonic and save it locally for deploying.
 
-# 🔭 Learning Solidity
+🛰 Use a faucet like faucet.paradigm.xyz to fund your deployer address (run yarn account again to view balances)
 
-📕 Read the docs: https://docs.soliditylang.org
+🚀 Run yarn deploy to deploy to your public network of choice (😅 wherever you can get ⛽️ gas)
 
-📚 Go through each topic from [solidity by example](https://solidity-by-example.org) editing `YourContract.sol` in **🏗 scaffold-eth**
+🔬 Inspect the block explorer for the network you deployed to... make sure your contract is there.
 
-- [Primitive Data Types](https://solidity-by-example.org/primitives/)
-- [Mappings](https://solidity-by-example.org/mapping/)
-- [Structs](https://solidity-by-example.org/structs/)
-- [Modifiers](https://solidity-by-example.org/function-modifier/)
-- [Events](https://solidity-by-example.org/events/)
-- [Inheritance](https://solidity-by-example.org/inheritance/)
-- [Payable](https://solidity-by-example.org/payable/)
-- [Fallback](https://solidity-by-example.org/fallback/)
+# 🚢 Ship it! 🚁
 
-📧 Learn the [Solidity globals and units](https://docs.soliditylang.org/en/latest/units-and-global-variables.html)
+✏️ Edit your frontend App.jsx in packages/react-app/src to change the targetNetwork to wherever you deployed your contract, and also change the BACKEND_URL constant to your deployed backend.
 
-# 🛠 Buidl
+📦 Run yarn build to package up your frontend.
 
-Check out all the [active branches](https://github.com/scaffold-eth/scaffold-eth/branches/active), [open issues](https://github.com/scaffold-eth/scaffold-eth/issues), and join/fund the 🏰 [BuidlGuidl](https://BuidlGuidl.com)!
+💽 Upload your app to surge with yarn surge (you could also yarn s3 or maybe even yarn ipfs?)
 
-  
- - 🚤  [Follow the full Ethereum Speed Run](https://medium.com/@austin_48503/%EF%B8%8Fethereum-dev-speed-run-bd72bcba6a4c)
+😬 Windows users beware! You may have to change the surge code in packages/react-app/package.json to just "surge": "surge ./build",
 
+⚙ If you get a permissions error yarn surge again until you get a unique URL, or customize it in the command line.
 
- - 🎟  [Create your first NFT](https://github.com/scaffold-eth/scaffold-eth/tree/simple-nft-example)
- - 🥩  [Build a staking smart contract](https://github.com/scaffold-eth/scaffold-eth/tree/challenge-1-decentralized-staking)
- - 🏵  [Deploy a token and vendor](https://github.com/scaffold-eth/scaffold-eth/tree/challenge-2-token-vendor)
- - 🎫  [Extend the NFT example to make a "buyer mints" marketplace](https://github.com/scaffold-eth/scaffold-eth/tree/buyer-mints-nft)
- - 🎲  [Learn about commit/reveal](https://github.com/scaffold-eth/scaffold-eth-examples/tree/commit-reveal-with-frontend)
- - ✍️  [Learn how ecrecover works](https://github.com/scaffold-eth/scaffold-eth-examples/tree/signature-recover)
- - 👩‍👩‍👧‍👧  [Build a multi-sig that uses off-chain signatures](https://github.com/scaffold-eth/scaffold-eth/tree/meta-multi-sig)
- - ⏳  [Extend the multi-sig to stream ETH](https://github.com/scaffold-eth/scaffold-eth/tree/streaming-meta-multi-sig)
- - ⚖️  [Learn how a simple DEX works](https://medium.com/@austin_48503/%EF%B8%8F-minimum-viable-exchange-d84f30bd0c90)
- - 🦍  [Ape into learning!](https://github.com/scaffold-eth/scaffold-eth/tree/aave-ape)
+🚔 Traffic to your url might break the Infura rate limit, edit your key: constants.js in packages/ract-app/src.
+
+# 📜 Contract Verification
+
+Update the api-key in packages/hardhat/package.json. You can get your key here.
+
+Now you are ready to run the yarn verify --network your_network command to verify your contracts on etherscan 🛰
 
 # 💌 P.S.
+
+📣 You can use `yarn export-non-deployed` to create the Wallet instance ABI.
 
 🌍 You need an RPC key for testnets and production deployments, create an [Alchemy](https://www.alchemy.com/) account and replace the value of `ALCHEMY_KEY = xxx` in `packages/react-app/src/constants.js` with your new key.
 
 📣 Make sure you update the `InfuraID` before you go to production. Huge thanks to [Infura](https://infura.io/) for our special account that fields 7m req/day!
 
+# Thanks to
+
+[Austin / BuidlGuidl / Scaffold-ETH](https://buidlguidl.com/) for an amazing learning / builder ecosystem, [Vitalik](https://github.com/vbuterin) for his clear post, and [Verumlotus](https://github.com/verumlotus) for the base contract.
+
 # 🏃💨 Speedrun Ethereum
+
 Register as a builder [here](https://speedrunethereum.com) and start on some of the challenges and build a portfolio.
 
 # 💬 Support Chat

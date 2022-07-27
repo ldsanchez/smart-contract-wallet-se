@@ -1,16 +1,7 @@
-import { Divider, Select, Col, Row, List } from "antd";
+import { Divider, Select, Col, Row, Avatar, Spin, Space, Button } from "antd";
+import { UserOutlined, EyeOutlined } from "@ant-design/icons";
 import React, { useState, useEffect } from "react";
-// import { ethers } from "ethers";
-import { Link } from "react-router-dom";
-import {
-  Address,
-  Balance,
-  Guardians,
-  TransactionListItem,
-  CreateTransaction,
-  CreateSmartContractWalletModal,
-  Transactions,
-} from "../components";
+import { Address, Balance, CreateTransaction, CreateSmartContractWalletModal } from "../components";
 
 import { useEventListener } from "eth-hooks/events/";
 import { useContractReader } from "eth-hooks";
@@ -41,6 +32,8 @@ export default function SmartContractWallet({
   DEBUG,
   blockExplorer,
   userSigner,
+  isOwner,
+  isGuardian,
 }) {
   // you can also use hooks locally in your component of choice
   // in this case, let's keep track of 'purpose' variable from our contract
@@ -66,14 +59,21 @@ export default function SmartContractWallet({
   useEffect(() => {
     if (address) {
       const smartContractWalletsForUser = walletSmartContractWalletEvents.reduce((filtered, createEvent) => {
-        if (
-          createEvent.args.owner.includes(address) ||
-          (createEvent.args.guardians.includes(ethers.utils.keccak256(address)) &&
-            !filtered.includes(createEvent.args.contractAddress))
+        if (createEvent.args.owner.includes(address) && !filtered.includes(createEvent.args.contractAddress)) {
+          filtered.push(createEvent.args.contractAddress);
+        } else if (
+          createEvent.args.guardians.includes(ethers.utils.keccak256(address)) &&
+          !filtered.includes(createEvent.args.contractAddress)
         ) {
           filtered.push(createEvent.args.contractAddress);
+        } else if (
+          !createEvent.args.owner.includes(address) &&
+          !createEvent.args.guardians.includes(ethers.utils.keccak256(address)) &&
+          filtered.includes(createEvent.args.contractAddress)
+        ) {
+          const index = filtered.indexOf(createEvent.args.contractAddress);
+          filtered.splice(index, 1);
         }
-
         return filtered;
       }, []);
 
@@ -81,28 +81,26 @@ export default function SmartContractWallet({
         const recentSmartContractWalletAddress = smartContractWalletsForUser[smartContractWalletsForUser.length - 1];
         if (recentSmartContractWalletAddress !== currentSmartContractWalletAddress) setContractNameForEvent(null);
         setCurrentSmartContractWalletAddress(recentSmartContractWalletAddress);
+        // setCurrentSmartContractWalletAddress(null);
         setSmartContractWallets(smartContractWalletsForUser);
+      } else {
+        setCurrentSmartContractWalletAddress(null);
+        setSmartContractWallets([]);
       }
     }
   }, [walletSmartContractWalletEvents, address]);
 
-  const [guardiansRequired, setGuardiansRequired] = useState(0);
-  const [nonce, setNonce] = useState(0);
-
-  const guardiansRequiredContract = useContractReader(readContracts, contractName, "guardiansRequired");
-  const nonceContract = useContractReader(readContracts, contractName, "nonce");
-  useEffect(() => {
-    setGuardiansRequired(guardiansRequiredContract);
-    setNonce(nonceContract);
-  }, [guardiansRequiredContract, nonceContract]);
+  const [inRecovery, setInRecovery] = useState("Active");
 
   useEffect(() => {
     async function getContractValues() {
-      const guardiansRequired = await readContracts.SmartContractWallet.guardiansRequired();
-      setGuardiansRequired(guardiansRequired);
 
-      const nonce = await readContracts.SmartContractWallet.nonce();
-      setNonce(nonce);
+      const inRecovery = await readContracts.SmartContractWallet.inRecovery();
+      if (inRecovery) {
+        setInRecovery("In Recovery");
+      } else {
+        setInRecovery("Active");
+      }
     }
 
     if (currentSmartContractWalletAddress) {
@@ -166,6 +164,22 @@ export default function SmartContractWallet({
 
   const userHasSmartContractWallets = currentSmartContractWalletAddress ? true : false;
 
+  const [loading, setLoading] = useState(false);
+
+  const cancelRecovery = async () => {
+    try {
+      setLoading(true);
+      await tx(writeContracts.SmartContractWallet.cancelRecovery());
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
+      setInRecovery("Active");
+    } catch (error) {
+      console.log("Error: ", error);
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{ padding: 16, margin: "auto", marginTop: 10 }}>
       <Row justify="center">
@@ -193,79 +207,69 @@ export default function SmartContractWallet({
                 </Option>
               ))}
             </Select>
+            <Avatar
+              style={{ margin: "auto", marginLeft: 10, backgroundColor: "#1890ff" }}
+              icon={isOwner ? <UserOutlined /> : isGuardian ? <EyeOutlined /> : ""}
+            />
+            <span style={{ margin: "auto", marginLeft: 10 }}>{isOwner ? "Owner" : isGuardian ? "Guardian" : ""}</span>
           </div>
         </Col>
       </Row>
       <Divider />
-      <Row justify="space-around">
-        <Col lg={6} xs={24}>
+      {isOwner && (
+        <Row justify="center">
           <div>
+            <h2 style={{ marginTop: 32 }}>Wallet Status: {inRecovery ? inRecovery : <Spin></Spin>}</h2>
+            {inRecovery === "In Recovery" && (
+              <div style={{ margin: 8 }}>
+                <Space style={{ marginTop: 20 }}>
+                  <Button loading={loading} onClick={cancelRecovery} type="primary">
+                    Cancel Recovery
+                  </Button>
+                </Space>
+              </div>
+            )}
             <div>
-              <h2 style={{ marginTop: 16 }}>Smart Contract Wallet Balance:</h2>
-              <div>
-                <Balance
-                  address={currentSmartContractWalletAddress ? currentSmartContractWalletAddress : ""}
-                  provider={localProvider}
-                  dollarMultiplier={price}
-                  size={64}
-                />
-              </div>
-              <div>
-                <QR
-                  value={currentSmartContractWalletAddress ? currentSmartContractWalletAddress.toString() : ""}
-                  size="180"
-                  level="H"
-                  includeMargin
-                  renderAs="svg"
-                  imageSettings={{ excavate: false }}
-                />
-              </div>
-              <div>
-                <Address
-                  address={currentSmartContractWalletAddress ? currentSmartContractWalletAddress : ""}
-                  ensProvider={mainnetProvider}
-                  blockExplorer={blockExplorer}
-                  fontSize={32}
-                />
-              </div>
-              <>
-                {userHasSmartContractWallets ? (
-                  <div>
-                    <Guardians
-                      guardianEvents={guardianEvents}
-                      guardiansRequired={guardiansRequired}
-                      mainnetProvider={mainnetProvider}
-                      blockExplorer={blockExplorer}
-                    />
-                  </div>
-                ) : (
-                  <div></div>
-                )}
-              </>
+              <Balance
+                address={currentSmartContractWalletAddress ? currentSmartContractWalletAddress : ""}
+                provider={localProvider}
+                dollarMultiplier={price}
+                size={64}
+              />
+            </div>
+            <div>
+              <QR
+                value={currentSmartContractWalletAddress ? currentSmartContractWalletAddress.toString() : ""}
+                size="180"
+                level="H"
+                includeMargin
+                renderAs="svg"
+                imageSettings={{ excavate: false }}
+              />
+            </div>
+            <div>
+              <Address
+                address={currentSmartContractWalletAddress ? currentSmartContractWalletAddress : ""}
+                ensProvider={mainnetProvider}
+                blockExplorer={blockExplorer}
+                fontSize={32}
+              />
+            </div>
+            <div>
+              <CreateTransaction
+                contractName={contractName}
+                contractAddress={contractAddress}
+                mainnetProvider={mainnetProvider}
+                localProvider={localProvider}
+                price={price}
+                tx={tx}
+                writeContracts={writeContracts}
+                DEBUG={DEBUG}
+              />
             </div>
           </div>
-        </Col>
-        <Col lg={6} xs={24}>
-          <h2 style={{ marginTop: 16 }}>Create a Transaction:</h2>
-          <CreateTransaction
-            contractName={contractName}
-            contractAddress={contractAddress}
-            mainnetProvider={mainnetProvider}
-            localProvider={localProvider}
-            price={price}
-            tx={tx}
-            readContracts={readContracts}
-            wtiteContracts={writeContracts}
-            userSigner={userSigner}
-            DEBUG={DEBUG}
-            nonce={nonce}
-            blockExplorer={blockExplorer}
-            guardiansRequired={guardiansRequired}
-          />
-        </Col>
-      </Row>
+        </Row>
+      )}
     </div>
   );
 }
-
-// export default Home;
