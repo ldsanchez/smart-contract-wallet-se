@@ -56,7 +56,7 @@ const { ethers } = require("ethers");
 */
 
 /// 📡 What chain are your contracts deployed to?
-const initialNetwork = NETWORKS.localhost; // <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
+const initialNetwork = NETWORKS.rinkeby; // <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
 
 // 😬 Sorry for all the console logging
 const DEBUG = true;
@@ -326,8 +326,10 @@ function App(props) {
   const [isGuardian, setIsGuardian] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
 
-  useEffect(() => {
-    async function getContractValues() {
+  async function getContractValues() {
+    console.log("ZZreadContracts",readContracts)
+    if(readContracts.hasOwnProperty('SmartContractWallet')){
+
       const guardiansRequired = await readContracts.SmartContractWallet.guardiansRequired();
       setGuardiansRequired(guardiansRequired);
       const isGuardian = await readContracts.SmartContractWallet.isGuardian(ethers.utils.keccak256(address));
@@ -337,7 +339,10 @@ function App(props) {
         setIsOwner(true);
       }
     }
+  }
 
+  useEffect(() => {
+    
     if (currentSmartContractWalletAddress) {
       readContracts.SmartContractWallet = new ethers.Contract(
         currentSmartContractWalletAddress,
@@ -353,6 +358,7 @@ function App(props) {
       setContractNameForEvent("SmartContractWallet");
       getContractValues();
     }
+    //getContractValues()
   }, [currentSmartContractWalletAddress, localProvider, readContracts, writeContracts]);
 
   return (
@@ -433,6 +439,9 @@ function App(props) {
         <Route exact path="/">
           {/* pass in any web3 props to this Home component. For example, yourLocalBalance */}
           <Home
+            setCurrentSmartContractWalletAddress={setCurrentSmartContractWalletAddress}
+            currentSmartContractWalletAddress={currentSmartContractWalletAddress}
+            updateContractValues={getContractValues}
             price={price}
             selectedChainId={selectedChainId}
             mainnetProvider={mainnetProvider}

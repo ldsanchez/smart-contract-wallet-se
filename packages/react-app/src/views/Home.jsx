@@ -34,6 +34,9 @@ export default function SmartContractWallet({
   userSigner,
   isOwner,
   isGuardian,
+  updateContractValues,
+  setCurrentSmartContractWalletAddress,
+  currentSmartContractWalletAddress
 }) {
   // you can also use hooks locally in your component of choice
   // in this case, let's keep track of 'purpose' variable from our contract
@@ -54,9 +57,14 @@ export default function SmartContractWallet({
 
   const [contractNameForEvent, setContractNameForEvent] = useState();
   const [smartContractWallets, setSmartContractWallets] = useState([]);
-  const [currentSmartContractWalletAddress, setCurrentSmartContractWalletAddress] = useState();
+  const [currentSmartContractWalletAddressHome, setcurrentSmartContractWalletAddressHome] = useState();
 
   useEffect(() => {
+    console.log("ZZZZcurrentSmartContractWalletAddressHome",currentSmartContractWalletAddressHome)
+    console.log("ZZZZcurrentSmartContractWalletAddress",currentSmartContractWalletAddress)
+    if (typeof currentSmartContractWalletAddress != "undefined" && currentSmartContractWalletAddress != null){
+      setcurrentSmartContractWalletAddressHome(currentSmartContractWalletAddress);
+    }
     if (address) {
       const smartContractWalletsForUser = walletSmartContractWalletEvents.reduce((filtered, createEvent) => {
         if (createEvent.args.owner.includes(address) && !filtered.includes(createEvent.args.contractAddress)) {
@@ -79,12 +87,20 @@ export default function SmartContractWallet({
 
       if (smartContractWalletsForUser.length > 0) {
         const recentSmartContractWalletAddress = smartContractWalletsForUser[smartContractWalletsForUser.length - 1];
-        if (recentSmartContractWalletAddress !== currentSmartContractWalletAddress) setContractNameForEvent(null);
-        setCurrentSmartContractWalletAddress(recentSmartContractWalletAddress);
-        // setCurrentSmartContractWalletAddress(null);
+        if (recentSmartContractWalletAddress !== currentSmartContractWalletAddressHome) setContractNameForEvent(null);
+        
+        if (typeof currentSmartContractWalletAddressHome != "undefined" && currentSmartContractWalletAddressHome != null){
+          setcurrentSmartContractWalletAddressHome(currentSmartContractWalletAddressHome);
+        }else{
+          if (typeof currentSmartContractWalletAddress != "undefined" && currentSmartContractWalletAddress != null){
+            setcurrentSmartContractWalletAddressHome(currentSmartContractWalletAddress);
+          }else{
+            setcurrentSmartContractWalletAddressHome(recentSmartContractWalletAddress);
+          }
+        }
         setSmartContractWallets(smartContractWalletsForUser);
       } else {
-        setCurrentSmartContractWalletAddress(null);
+        setcurrentSmartContractWalletAddressHome(null);
         setSmartContractWallets([]);
       }
     }
@@ -93,7 +109,7 @@ export default function SmartContractWallet({
   const [inRecovery, setInRecovery] = useState("Active");
 
   useEffect(() => {
-    async function getContractValues() {
+    async function getContractValuesHome() {
 
       const inRecovery = await readContracts.SmartContractWallet.inRecovery();
       if (inRecovery) {
@@ -101,27 +117,29 @@ export default function SmartContractWallet({
       } else {
         setInRecovery("Active");
       }
+      await updateContractValues();
     }
 
-    if (currentSmartContractWalletAddress) {
+    if (currentSmartContractWalletAddressHome) {
       readContracts.SmartContractWallet = new ethers.Contract(
-        currentSmartContractWalletAddress,
+        currentSmartContractWalletAddressHome,
         nonDeployedABI.SmartContractWallet,
         localProvider,
       );
       writeContracts.SmartContractWallet = new ethers.Contract(
-        currentSmartContractWalletAddress,
+        currentSmartContractWalletAddressHome,
         nonDeployedABI.SmartContractWallet,
         userSigner,
       );
 
+      console.log("AQUI VAAAAAAAAAAAA")
       setContractNameForEvent("SmartContractWallet");
-      getContractValues();
+      getContractValuesHome();
     }
-  }, [currentSmartContractWalletAddress, localProvider, readContracts, writeContracts]);
+  }, [currentSmartContractWalletAddressHome, localProvider, readContracts, writeContracts]);
 
   const allWalletEvents = useEventListener(
-    currentSmartContractWalletAddress ? readContracts : null,
+    currentSmartContractWalletAddressHome ? readContracts : null,
     contractNameForEvent,
     "Wallet",
     localProvider,
@@ -132,7 +150,7 @@ export default function SmartContractWallet({
   const [walletEvents, setWalletEvents] = useState();
 
   const allGuardianEvents = useEventListener(
-    currentSmartContractWalletAddress ? readContracts : null,
+    currentSmartContractWalletAddressHome ? readContracts : null,
     contractNameForEvent,
     "Guardian",
     localProvider,
@@ -147,22 +165,24 @@ export default function SmartContractWallet({
     //   allExecuteTransactionEvents.filter(contractEvent => contractEvent.address === currentMultisigWalletAddress),
     // );
     setWalletEvents(
-      allWalletEvents.filter(contractEvent => contractEvent.address === currentSmartContractWalletAddress),
+      allWalletEvents.filter(contractEvent => contractEvent.address === currentSmartContractWalletAddressHome),
     );
 
     setGuardianEvents(
-      allGuardianEvents.filter(contractEvent => contractEvent.address === currentSmartContractWalletAddress),
+      allGuardianEvents.filter(contractEvent => contractEvent.address === currentSmartContractWalletAddressHome),
     );
-  }, [allWalletEvents, allGuardianEvents, currentSmartContractWalletAddress]);
+  }, [allWalletEvents, allGuardianEvents, currentSmartContractWalletAddressHome]);
 
   const handleSmartContractWalletChange = value => {
     setContractNameForEvent(null);
-    setCurrentSmartContractWalletAddress(value);
+    console.log("VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV",value)
+    setCurrentSmartContractWalletAddress(value)
+    setcurrentSmartContractWalletAddressHome(value);
   };
 
-  if (DEBUG) console.log("📟 currentSmartContractWalletAddress:", currentSmartContractWalletAddress);
+  if (DEBUG) console.log("📟 currentSmartContractWalletAddressHome:", currentSmartContractWalletAddressHome);
 
-  const userHasSmartContractWallets = currentSmartContractWalletAddress ? true : false;
+  const userHasSmartContractWallets = currentSmartContractWalletAddressHome ? true : false;
 
   const [loading, setLoading] = useState(false);
 
@@ -197,7 +217,7 @@ export default function SmartContractWallet({
               setIsCreateModalVisible={setIsCreateModalVisible}
             />
             <Select
-              value={[currentSmartContractWalletAddress]}
+              value={currentSmartContractWalletAddressHome}
               style={{ width: 400 }}
               onChange={handleSmartContractWalletChange}
             >
@@ -231,7 +251,7 @@ export default function SmartContractWallet({
             )}
             <div>
               <Balance
-                address={currentSmartContractWalletAddress ? currentSmartContractWalletAddress : ""}
+                address={currentSmartContractWalletAddressHome ? currentSmartContractWalletAddressHome : ""}
                 provider={localProvider}
                 dollarMultiplier={price}
                 size={64}
@@ -239,7 +259,7 @@ export default function SmartContractWallet({
             </div>
             <div>
               <QR
-                value={currentSmartContractWalletAddress ? currentSmartContractWalletAddress.toString() : ""}
+                value={currentSmartContractWalletAddressHome ? currentSmartContractWalletAddressHome.toString() : ""}
                 size="180"
                 level="H"
                 includeMargin
@@ -249,7 +269,7 @@ export default function SmartContractWallet({
             </div>
             <div>
               <Address
-                address={currentSmartContractWalletAddress ? currentSmartContractWalletAddress : ""}
+                address={currentSmartContractWalletAddressHome ? currentSmartContractWalletAddressHome : ""}
                 ensProvider={mainnetProvider}
                 blockExplorer={blockExplorer}
                 fontSize={32}

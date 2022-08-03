@@ -12,6 +12,12 @@ BuidlGuidl Build submission: Scaffold-ETH implementation of a Social Recovery Wa
 
 Losing access to wallets is an increasing problem with so many new people onboarding crypto, a Social Recovery Smart Contract Wallet implementation helps solve this particular issue, by giving power to a group of actors (friends & family / other owned wallets) that can help the owner in the recovery process.
 
+> There are many possible choices for whom to select as a guardian. The three most common choices are:
+>
+> - Other devices (or paper mnemonics) owned by the wallet holder themselves
+> - Friends and family members
+> - Institutions, which would sign a recovery message if they get a confirmation of your phone number or email or perhaps in high value cases verify you personally by video call
+
 # Features
 
 - Transfers / Contract Calls Transactions
@@ -25,7 +31,19 @@ Social Recovery is implemented by assigning several wallet guardians, and a mini
 
 ## Wallet Creation
 
-For the wallet creation we only need the guardians addresses (converted into hashes using ethers.utils.keccak256 in the front-end) and minimum guardians required for a recovery.
+For the wallet creation we only need the guardians addresses (converted into hashes using ethers.utils.keccak256 in the front-end) and minimum guardians required for a recovery (in Vitalik's post he suggest as much as 7 Guardians).
+
+**Note:** For simplicity an testing purposes curently there is no minimum required guardians in the contract, but we should enforce for at least 3.
+
+- CreateSmartContractWalletModal.jsx
+
+```javascript
+guardians.forEach((element, index) => {
+  guardians[index] = ethers.utils.keccak256(element);
+});
+```
+
+- SmartContractWallet.sol
 
 ```solidity
     constructor(
@@ -64,6 +82,8 @@ For the wallet creation we only need the guardians addresses (converted into has
 
 Using a Call function for Transfers / Contract Interaction
 
+- SmartContractWallet.sol
+
 ```solidity
 function executeTransaction(
         address payable _target,
@@ -83,6 +103,8 @@ function executeTransaction(
 ## Social Recovery
 
 The Social Recovery initiates when we ask / use one of our guardians to initiate the recovery process, passing the new proposed owner address, creating a recovery round and setting the recovery mode of our wallet. Each Guardian discloses their address and we keep track of them.
+
+- SmartContractWallet.sol
 
 ```solidity
 function initiateRecovery(address _proposedOwner)
@@ -110,6 +132,8 @@ function initiateRecovery(address _proposedOwner)
 
 Then is time for other guardians to support the recovery process, with the same information as above.
 
+- SmartContractWallet.sol
+
 ```solidity
 function supportRecovery(address _proposedOwner)
         external
@@ -132,6 +156,8 @@ function supportRecovery(address _proposedOwner)
 ```
 
 Finally any Guardian executes the recovery, that goes through each supporter and compares the values to see if an agreement was met for the recovery process.
+
+- SmartContractWallet.sol
 
 ```solidity
 function executeRecovery() external onlyGuardian onlyInRecovery {
@@ -171,7 +197,7 @@ function executeRecovery() external onlyGuardian onlyInRecovery {
 
 # Dapp
 
-Using Scaffold-ETH is easy to prototype these complex interactions between Owner and Guardians, from the Debug tab we can test everything before creating the interface for our Dapp, by opening several browers each one representing a different wallet / actor.
+Using Scaffold-ETH is easy to prototype these complex interactions between Owner and Guardians, from the Debug tab we can test everything before creating the interface for our Dapp, and by opening several browers each one representing a different wallet / actor.
 
 ## From the Owner perspective
 
